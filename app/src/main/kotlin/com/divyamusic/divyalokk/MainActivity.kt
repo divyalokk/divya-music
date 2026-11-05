@@ -4,12 +4,12 @@ import android.Manifest
 import android.graphics.Bitmap
 import android.content.ContentUris
 import android.content.pm.PackageManager
-import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import androidx.activity.ComponentActivity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -95,19 +95,7 @@ data class ArtworkState(
 
 class MainActivity : ComponentActivity() {
 
-    private var mediaPlayer: MediaPlayer? = null
-
-    private val equalizer = AudioEqualizer()
-
-    private val songs = mutableStateListOf<Song>()
-
-    private var currentIndex by mutableIntStateOf(-1)
-
-    private var isPlaying by mutableStateOf(false)
-
-    private var currentPosition by mutableIntStateOf(0)
-
-    private var duration by mutableIntStateOf(1)
+    // Playback lives in the shared Playback store (see Playback.kt)
 
 
     // ------------------------------------------------
@@ -122,7 +110,15 @@ class MainActivity : ComponentActivity() {
             if (granted) {
                 loadMusic()
             }
+
+            requestNotificationPermission()
         }
+
+    // Android 13+ needs this to show the playback notification (song controls)
+    private val notificationLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { }
 
 
     // ------------------------------------------------
@@ -130,79 +126,40 @@ class MainActivity : ComponentActivity() {
     // ------------------------------------------------
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
+
         super.onCreate(savedInstanceState)
+
+        Playback.init(this)
 
         setContent {
 
             MusicApp(
-                songs = songs,
-                currentIndex = currentIndex,
-                isPlaying = isPlaying,
-                currentPosition = currentPosition,
-                duration = duration,
+                songs = Playback.songs,
+                currentIndex = Playback.currentIndex,
+                isPlaying = Playback.isPlaying,
+                currentPosition = Playback.currentPosition,
+                duration = Playback.duration,
 
-                equalizer = equalizer,
+                equalizer = Playback.equalizer,
 
-                // Real playback position from the MediaPlayer
-                getCurrentPosition = {
-                    mediaPlayer?.let { player ->
-                        runCatching { player.currentPosition }
-                            .getOrDefault(0)
-                    } ?: 0
-                },
+                // Real playback position from the player
+                getCurrentPosition = { Playback.livePosition() },
 
                 // Update Compose position
                 onPositionChange = { position ->
-                    currentPosition = position
+                    Playback.currentPosition = position
                 },
 
-                // Song click
-                onSongClick = { index ->
+                onSongClick = { index -> Playback.playSong(index) },
 
-                    if (index in songs.indices) {
+                onPlayPause = { Playback.playPause() },
 
-                        currentIndex = index
+                onPrevious = { Playback.previous() },
 
-                        playSong(
-                            songs[index]
-                        )
-                    }
-                },
+                onNext = { Playback.next() },
 
-                // Play / Pause
-                onPlayPause = {
-                    playPause()
-                },
-
-                // Previous
-                onPrevious = {
-                    previousSong()
-                },
-
-                // Next
-                onNext = {
-                    nextSong()
-                },
-
-                // Seek
-                onSeek = { position ->
-
-                    mediaPlayer?.let { player ->
-
-                        val safePosition =
-                            position.coerceIn(
-                                0,
-                                player.duration.coerceAtLeast(1)
-                            )
-
-                        player.seekTo(
-                            safePosition
-                        )
-
-                        currentPosition =
-                            safePosition
-                    }
-                }
+                onSeek = { position -> Playback.seekTo(position) }
             )
         }
 
@@ -233,10 +190,28 @@ class MainActivity : ComponentActivity() {
         ) {
 
             loadMusic()
+            requestNotificationPermission()
 
         } else {
 
             permissionLauncher.launch(permission)
+        }
+    }
+
+
+    // ------------------------------------------------
+    // NOTIFICATION PERMISSION (Android 13+)
+    // ------------------------------------------------
+
+    private fun requestNotificationPermission() {
+
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+
+            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
@@ -339,197 +314,10 @@ class MainActivity : ComponentActivity() {
         }
 
 
-        songs.clear()
-
-        songs.addAll(
-            newSongs
-        )
+        Playback.loadSongs(newSongs)
     }
 
 
-    // ------------------------------------------------
-    // PLAY SONG
-    // ------------------------------------------------
-
-    private fun playSong(song: Song) {
-
-        mediaPlayer?.release()
-
-        mediaPlayer = null
-
-
-        currentPosition = 0
-
-        duration = 1
-
-
-        try {
-
-            mediaPlayer =
-                MediaPlayer.create(
-                    this,
-                    song.uri
-                )
-
-
-            val player =
-                mediaPlayer
-
-
-            if (player == null) {
-
-                isPlaying = false
-
-                return
-            }
-
-
-            duration =
-                player.duration.coerceAtLeast(1)
-
-
-            player.setOnCompletionListener {
-
-                nextSong()
-            }
-
-
-            // Apply the equalizer to this track's audio session
-            equalizer.attach(player.audioSessionId)
-
-
-            player.start()
-
-
-            isPlaying = true
-
-        } catch (e: Exception) {
-
-            e.printStackTrace()
-
-            isPlaying = false
-        }
-    }
-
-
-    // ------------------------------------------------
-    // PLAY / PAUSE
-    // ------------------------------------------------
-
-    private fun playPause() {
-
-        val player =
-            mediaPlayer
-
-
-        // No player
-        if (player == null) {
-
-            if (songs.isNotEmpty()) {
-
-                currentIndex = 0
-
-                playSong(
-                    songs[currentIndex]
-                )
-            }
-
-            return
-        }
-
-
-        try {
-
-            if (player.isPlaying) {
-
-                player.pause()
-
-                isPlaying = false
-
-            } else {
-
-                player.start()
-
-                isPlaying = true
-            }
-
-        } catch (e: Exception) {
-
-            e.printStackTrace()
-
-            isPlaying = false
-        }
-    }
-
-
-    // ------------------------------------------------
-    // PREVIOUS SONG
-    // ------------------------------------------------
-
-    private fun previousSong() {
-
-        if (songs.isEmpty()) return
-
-
-        if (currentIndex > 0) {
-
-            currentIndex--
-
-            playSong(
-                songs[currentIndex]
-            )
-
-        } else if (currentIndex == 0) {
-
-            // First song: restart from beginning
-            mediaPlayer?.seekTo(0)
-
-            currentPosition = 0
-        }
-    }
-
-
-    // ------------------------------------------------
-    // NEXT SONG
-    // ------------------------------------------------
-
-    private fun nextSong() {
-
-        if (songs.isEmpty()) return
-
-
-        if (currentIndex < songs.lastIndex) {
-
-            currentIndex++
-
-            playSong(
-                songs[currentIndex]
-            )
-
-        } else {
-
-            // Last song finished
-            isPlaying = false
-
-            currentPosition = duration
-        }
-    }
-
-
-    // ------------------------------------------------
-    // DESTROY
-    // ------------------------------------------------
-
-    override fun onDestroy() {
-
-        equalizer.release()
-
-        mediaPlayer?.release()
-
-        mediaPlayer = null
-
-        super.onDestroy()
-    }
 }
 
 
@@ -636,7 +424,9 @@ fun MusicApp(
     // The glow palette is only built when liquid glass dynamic is on.
     val liquid = settings.liquidDynamic
 
-    val art by produceState(ArtworkState(null, null), currentSong?.uri, liquid) {
+    val solid = settings.solidDynamic
+
+    val art by produceState(ArtworkState(null, null), currentSong?.uri, liquid, solid) {
 
         value = ArtworkState(null, null)
 
@@ -646,12 +436,17 @@ fun MusicApp(
 
             val bitmap = loadArtwork(context, song.uri)
 
+            val palette = if ((liquid || solid) && bitmap != null) extractGlowPalette(bitmap) else null
+
             ArtworkState(
                 bitmap = bitmap,
-                palette = if (liquid && bitmap != null) extractGlowPalette(bitmap) else null
+                palette = palette
             )
         }
     }
+
+    // Solid colour: the artwork's main hue as one flat colour (null keeps the normal look)
+    val solidColor = if (solid && !liquid) art.palette?.primary else null
 
     BackHandler(enabled = page != AppPage.Home) {
         page = AppPage.Home
@@ -664,7 +459,9 @@ fun MusicApp(
 
     DivyaTheme(
         materialDynamic = settings.materialDynamic,
-        artworkPalette = art.palette
+        artworkPalette = if (solidColor != null) null else art.palette,
+        solidColor = solidColor,
+        liquidGlass = settings.liquidGlass
     ) {
 
         LiquidBackground {

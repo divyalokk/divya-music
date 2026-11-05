@@ -13,6 +13,11 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
+    <!-- Playback notification with song controls -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
     <!-- In-app update: GitHub se release check karne ke liye -->
     <uses-permission android:name="android.permission.INTERNET" />
 
@@ -27,9 +32,16 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.App">
 
+        <!-- Foreground service that keeps playback and the notification alive -->
+        <service
+            android:name=".PlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <!-- Main Activity -->
         <activity
             android:name=".MainActivity"
+            android:theme="@style/Theme.App.Starting"
             android:exported="true">
 
             <intent-filter>

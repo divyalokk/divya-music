@@ -69,6 +69,22 @@ class AudioEqualizer {
     var currentPreset by mutableIntStateOf(-1)
         private set
 
+    /** True while wired headphones or a Bluetooth device are the audio output. */
+    var outputConnected by mutableStateOf(false)
+        private set
+
+    /** Applies the equalizer only when headphones or Bluetooth are connected. */
+    fun updateOutput(connected: Boolean) {
+
+        outputConnected = connected
+
+        try {
+            effect?.enabled = isOn && connected
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     val bandLevels = mutableStateListOf<Int>()
 
     val bandFrequencies = mutableStateListOf<Int>()
@@ -120,7 +136,7 @@ class AudioEqualizer {
                 presetNames.add(eq.getPresetName(p.toShort()))
             }
 
-            eq.enabled = isOn
+            eq.enabled = isOn && outputConnected
 
             available = true
 
@@ -138,7 +154,7 @@ class AudioEqualizer {
         isOn = on
 
         try {
-            effect?.enabled = on
+            effect?.enabled = on && outputConnected
         } catch (e: Exception) {
             e.printStackTrace()
         }

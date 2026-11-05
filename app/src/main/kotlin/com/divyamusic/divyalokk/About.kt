@@ -92,7 +92,7 @@ fun AboutScreen(
             )
 
             Text(
-                text = "Version 1.0",
+                text = "Version 1.1",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

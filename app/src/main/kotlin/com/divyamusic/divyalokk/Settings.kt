@@ -57,6 +57,28 @@ class AppSettings(context: Context) {
     var liquidDynamic by mutableStateOf(prefs.getBoolean(KEY_LIQUID, false))
         private set
 
+    /** One solid colour from the current song's artwork, applied across the whole app. */
+    var solidDynamic by mutableStateOf(prefs.getBoolean(KEY_SOLID, false))
+        private set
+
+    /** Frosted glass surfaces and the animated glow. On by default; off gives flat solid surfaces. */
+    var liquidGlass by mutableStateOf(prefs.getBoolean(KEY_GLASS, true))
+        private set
+
+    fun updateLiquidGlass(on: Boolean) {
+
+        liquidGlass = on
+
+        prefs.edit().putBoolean(KEY_GLASS, on).apply()
+    }
+
+    fun updateSolidDynamic(on: Boolean) {
+
+        solidDynamic = on
+
+        prefs.edit().putBoolean(KEY_SOLID, on).apply()
+    }
+
     fun updateMaterialDynamic(on: Boolean) {
 
         materialDynamic = on
@@ -74,6 +96,8 @@ class AppSettings(context: Context) {
     private companion object {
         const val KEY_MATERIAL = "material_dynamic"
         const val KEY_LIQUID = "liquid_dynamic"
+        const val KEY_SOLID = "solid_dynamic"
+        const val KEY_GLASS = "liquid_glass"
     }
 }
 
@@ -133,6 +157,16 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         ThemeSwitchCard(
+            title = "Liquid glass effect",
+            description = "Frosted glass surfaces and the moving glow. Turn off for flat solid surfaces.",
+            checked = settings.liquidGlass,
+            enabled = true,
+            onCheckedChange = { settings.updateLiquidGlass(it) }
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        ThemeSwitchCard(
             title = "Material dynamic theme",
             description = if (canUseMaterialDynamic) {
                 "Colour the app with the palette of your wallpaper."
@@ -142,6 +176,16 @@ fun SettingsScreen(
             checked = settings.materialDynamic && canUseMaterialDynamic,
             enabled = canUseMaterialDynamic,
             onCheckedChange = { settings.updateMaterialDynamic(it) }
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        ThemeSwitchCard(
+            title = "Solid colour dynamic theme",
+            description = "Use one solid colour from the current song's artwork for the whole app.",
+            checked = settings.solidDynamic,
+            enabled = true,
+            onCheckedChange = { settings.updateSolidDynamic(it) }
         )
 
         Spacer(modifier = Modifier.height(12.dp))

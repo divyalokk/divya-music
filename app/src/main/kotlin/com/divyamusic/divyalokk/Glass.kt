@@ -27,10 +27,12 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -68,6 +70,9 @@ val DefaultGlowPalette = GlowPalette(AccentPink, AccentCoral, AccentViolet)
 
 val LocalGlowPalette = staticCompositionLocalOf { DefaultGlowPalette }
 
+/** False turns off the frosted glass surfaces and the animated glow (flat solid surfaces). */
+val LocalLiquidGlass = staticCompositionLocalOf { true }
+
 /** Main accent for sliders, selected rows and the play button. */
 @Composable
 @ReadOnlyComposable
@@ -77,11 +82,14 @@ fun divyaAccent(): Color = LocalGlowPalette.current.primary
  * App theme. With [materialDynamic] on (Android 12+) the colour scheme comes from the
  * system wallpaper palette. A non-null [artworkPalette] (liquid glass dynamic) replaces
  * the glow and accent colours with the colours of the current song's artwork.
+ * [liquidGlass] = false draws flat solid surfaces instead of the glass look.
  */
 @Composable
 fun DivyaTheme(
     materialDynamic: Boolean = false,
     artworkPalette: GlowPalette? = null,
+    solidColor: Color? = null,
+    liquidGlass: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val canUseDynamic = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -93,12 +101,17 @@ fun DivyaTheme(
     }
 
     val palette = when {
+        // Solid colour: every glow, accent and button uses this one colour
+        solidColor != null -> GlowPalette(solidColor, solidColor, solidColor)
         artworkPalette != null -> artworkPalette
         materialDynamic && canUseDynamic -> GlowPalette(scheme.primary, scheme.secondary, scheme.tertiary)
         else -> DefaultGlowPalette
     }
 
-    CompositionLocalProvider(LocalGlowPalette provides palette) {
+    CompositionLocalProvider(
+        LocalGlowPalette provides palette,
+        LocalLiquidGlass provides liquidGlass
+    ) {
         MaterialTheme(
             colorScheme = scheme,
             content = content
@@ -122,22 +135,33 @@ fun LiquidBackground(
     val secondary by animateColorAsState(palette.secondary, tween(durationMillis = 700), label = "glowSecondary")
     val tertiary by animateColorAsState(palette.tertiary, tween(durationMillis = 700), label = "glowTertiary")
 
+    val glassOn = LocalLiquidGlass.current
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        Color(0xFF1B0B22),
-                        Color(0xFF0B0B14),
-                        Color(0xFF071521)
+            .then(
+                if (glassOn) {
+                    Modifier.background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color(0xFF1B0B22),
+                                Color(0xFF0B0B14),
+                                Color(0xFF071521)
+                            )
+                        )
                     )
-                )
+                } else {
+                    // Flat background when liquid glass is off
+                    Modifier.background(Color(0xFF0B0B14))
+                }
             )
     ) {
-        GlowBlob(size = 320.dp, x = (-90).dp, y = (-60).dp, color = primary.copy(alpha = 0.55f))
-        GlowBlob(size = 280.dp, x = 200.dp, y = 320.dp, color = secondary.copy(alpha = 0.35f))
-        GlowBlob(size = 240.dp, x = (-60).dp, y = 620.dp, color = tertiary.copy(alpha = 0.4f))
+        if (glassOn) {
+            GlowBlob(size = 320.dp, x = (-90).dp, y = (-60).dp, color = primary.copy(alpha = 0.55f))
+            GlowBlob(size = 280.dp, x = 200.dp, y = 320.dp, color = secondary.copy(alpha = 0.35f))
+            GlowBlob(size = 240.dp, x = (-60).dp, y = 620.dp, color = tertiary.copy(alpha = 0.4f))
+        }
         content()
     }
 }
@@ -173,26 +197,37 @@ fun Modifier.glass(
     shape: Shape = RoundedCornerShape(24.dp),
     tint: Color = Color.White,
     strength: Float = 0.12f
-): Modifier = this
-    .clip(shape)
-    .background(
-        Brush.verticalGradient(
-            listOf(
-                tint.copy(alpha = strength * 2f),
-                tint.copy(alpha = strength * 0.6f)
+): Modifier = composed {
+
+    if (!LocalLiquidGlass.current) {
+
+        // Liquid glass off: a flat surface, tinted a little by [tint]
+        return@composed this
+            .clip(shape)
+            .background(lerp(Color(0xFF15151F), tint, (strength * 2f).coerceIn(0f, 1f)))
+    }
+
+    this
+        .clip(shape)
+        .background(
+            Brush.verticalGradient(
+                listOf(
+                    tint.copy(alpha = strength * 2f),
+                    tint.copy(alpha = strength * 0.6f)
+                )
             )
         )
-    )
-    .border(
-        width = 1.dp,
-        brush = Brush.linearGradient(
-            listOf(
-                Color.White.copy(alpha = 0.6f),
-                Color.White.copy(alpha = 0.05f)
-            )
-        ),
-        shape = shape
-    )
+        .border(
+            width = 1.dp,
+            brush = Brush.linearGradient(
+                listOf(
+                    Color.White.copy(alpha = 0.6f),
+                    Color.White.copy(alpha = 0.05f)
+                )
+            ),
+            shape = shape
+        )
+}
 
 @Composable
 fun GlassCard(
