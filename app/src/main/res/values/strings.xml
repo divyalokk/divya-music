@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">DivyaMusic</string>
+
+    <!-- In-app update (UpdateManager.kt) -->
+    <string name="update_dialog_title">Update available (v%1$s)</string>
+    <string name="update_no_notes">Naya version available hai.</string>
+    <string name="update_confirm">Update</string>
+    <string name="update_cancel">Cancel</string>
+    <string name="update_download_title">DivyaMusic update %1$s</string>
+    <string name="update_allow_unknown_sources">Allow karke wapas aao aur dobara Update dabao</string>
+    <string name="update_download_started">Download shuru ho gaya...</string>
+    <string name="update_download_failed">Update download fail ho gaya</string>
+    <string name="update_checksum_failed">Update verify nahi hua, install nahi kiya gaya</string>
 </resources>

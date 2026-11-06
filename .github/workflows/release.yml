@@ -1,0 +1,66 @@
+name: Release APK
+
+# Builds a signed release APK when a version tag (for example v3.2) is pushed,
+# then attaches the APK and its .sha256 file to the matching GitHub Release.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      # Signing material comes only from GitHub secrets; nothing is committed.
+      KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Decode keystore into the runner temp directory
+        run: |
+          KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          echo "RELEASE_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        run: ./gradlew :app:assembleRelease --no-daemon
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ env.RELEASE_KEYSTORE_PATH }}
+          RELEASE_KEYSTORE_PASSWORD: ${{ env.KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ env.KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
+
+      - name: Create SHA-256 file
+        run: |
+          APK="app/build/outputs/apk/release/app-release.apk"
+          test -f "$APK"
+          cp "$APK" "$RUNNER_TEMP/app-release.apk"
+          (cd "$RUNNER_TEMP" && sha256sum app-release.apk > app-release.apk.sha256)
+          cat "$RUNNER_TEMP/app-release.apk.sha256"
+
+      - name: Attach APK and checksum to the GitHub Release
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes
+          gh release upload "$TAG" \
+            "$RUNNER_TEMP/app-release.apk" \
+            "$RUNNER_TEMP/app-release.apk.sha256" \
+            --clobber
+
+      - name: Remove decoded keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
