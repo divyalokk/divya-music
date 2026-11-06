@@ -46,15 +46,16 @@ object UpdateManager {
     suspend fun checkForUpdate(context: Context): UpdateInfo? = withContext(Dispatchers.IO) {
         var conn: HttpURLConnection? = null
         try {
-            conn = URL("https://api.github.com/repos/$OWNER/$REPO/releases/latest")
+            val c = URL("https://api.github.com/repos/$OWNER/$REPO/releases/latest")
                 .openConnection() as HttpURLConnection
-            conn.setRequestProperty("Accept", "application/vnd.github+json")
-            conn.setRequestProperty("User-Agent", "DivyaMusic-Updater")
-            conn.connectTimeout = 10_000
-            conn.readTimeout = 10_000
+            conn = c
+            c.setRequestProperty("Accept", "application/vnd.github+json")
+            c.setRequestProperty("User-Agent", "DivyaMusic-Updater")
+            c.connectTimeout = 10_000
+            c.readTimeout = 10_000
 
-            if (conn.responseCode != 200) return@withContext null
-            val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+            if (c.responseCode != 200) return@withContext null
+            val json = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
 
             val latest = json.getString("tag_name").removePrefix("v")
             val current = context.packageManager

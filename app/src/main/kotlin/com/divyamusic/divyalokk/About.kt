@@ -16,12 +16,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -51,11 +51,10 @@ fun AboutScreen(
                 .padding(top = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            GlassIconButton(onClick = onBack) {
+            AppIconButton(onClick = onBack) {
                 Icon(
                     imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White
+                    contentDescription = "Back"
                 )
             }
 
@@ -69,10 +68,9 @@ fun AboutScreen(
         Spacer(modifier = Modifier.height(32.dp))
 
         // App identity
-        GlassCard(
+        AppCard(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(32.dp),
-            strength = 0.16f,
             contentPadding = 24.dp,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -92,7 +90,7 @@ fun AboutScreen(
             )
 
             Text(
-                text = "Version 1.1",
+                text = "Version 3.1",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -101,7 +99,7 @@ fun AboutScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         // Description
-        GlassCard(
+        AppCard(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(28.dp)
         ) {
@@ -135,7 +133,7 @@ fun AboutScreen(
 @Composable
 fun AboutScreenPreview() {
     DivyaTheme {
-        LiquidBackground {
+        Surface(modifier = Modifier.fillMaxSize()) {
             AboutScreen(onBack = {})
         }
     }

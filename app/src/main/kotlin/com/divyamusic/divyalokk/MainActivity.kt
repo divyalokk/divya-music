@@ -48,7 +48,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.produceState
@@ -81,13 +80,6 @@ data class Song(
     val artist: String,
     val uri: Uri
 )
-
-/** Decoded cover of the current song and, when liquid glass dynamic is on, its glow palette. */
-data class ArtworkState(
-    val bitmap: Bitmap?,
-    val palette: GlowPalette?
-)
-
 
 // ----------------------------------------------------
 // MAIN ACTIVITY
@@ -420,33 +412,18 @@ fun MusicApp(
 
     val context = LocalContext.current
 
-    // Artwork of the current song, decoded off the main thread and shared by the player and theme.
-    // The glow palette is only built when liquid glass dynamic is on.
-    val liquid = settings.liquidDynamic
+    // Cover of the current song, decoded off the main thread and shared by the player
+    val art by produceState<Bitmap?>(null, currentSong?.uri) {
 
-    val solid = settings.solidDynamic
-
-    val art by produceState(ArtworkState(null, null), currentSong?.uri, liquid, solid) {
-
-        value = ArtworkState(null, null)
+        value = null
 
         val song = currentSong ?: return@produceState
 
         value = withContext(Dispatchers.IO) {
 
-            val bitmap = loadArtwork(context, song.uri)
-
-            val palette = if ((liquid || solid) && bitmap != null) extractGlowPalette(bitmap) else null
-
-            ArtworkState(
-                bitmap = bitmap,
-                palette = palette
-            )
+            loadArtwork(context, song.uri)
         }
     }
-
-    // Solid colour: the artwork's main hue as one flat colour (null keeps the normal look)
-    val solidColor = if (solid && !liquid) art.palette?.primary else null
 
     BackHandler(enabled = page != AppPage.Home) {
         page = AppPage.Home
@@ -458,13 +435,14 @@ fun MusicApp(
 
 
     DivyaTheme(
-        materialDynamic = settings.materialDynamic,
-        artworkPalette = if (solidColor != null) null else art.palette,
-        solidColor = solidColor,
-        liquidGlass = settings.liquidGlass
+        materialDynamic = settings.materialDynamic
     ) {
 
-        LiquidBackground {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
 
             // Pages cross-fade when switched
             AnimatedContent(
@@ -518,7 +496,7 @@ fun MusicApp(
 
                 FullPlayerScreen(
                     currentSong = currentSong,
-                    artwork = art.bitmap,
+                    artwork = art,
                     isPlaying = isPlaying,
                     currentPosition = currentPosition,
                     duration = duration,
@@ -610,7 +588,7 @@ private fun BoxScope.HomeContent(
                 )
             }
 
-            GlassIconButton(onClick = onSettings) {
+            AppIconButton(onClick = onSettings) {
 
                 Icon(
                     imageVector = Icons.Default.Settings,
@@ -621,7 +599,7 @@ private fun BoxScope.HomeContent(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            GlassIconButton(onClick = onAbout) {
+            AppIconButton(onClick = onAbout) {
 
                 Icon(
                     imageVector = Icons.Default.Info,
@@ -647,7 +625,7 @@ private fun BoxScope.HomeContent(
                 contentAlignment = Alignment.Center
             ) {
 
-                GlassCard(
+                AppCard(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     contentPadding = 24.dp
                 ) {
@@ -726,10 +704,10 @@ private fun SongRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 8.dp)
-            .glass(
-                shape = RoundedCornerShape(20.dp),
-                tint = if (selected) AccentPink else Color.White,
-                strength = if (selected) 0.22f else 0.08f
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceContainerHigh
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -739,7 +717,8 @@ private fun SongRow(
         Icon(
             painter = painterResource(R.drawable.music),
             contentDescription = null,
-            tint = if (selected) Color.White else AccentCoral,
+            tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.secondary,
             modifier = Modifier.size(28.dp)
         )
 
@@ -795,13 +774,12 @@ private fun NowPlayingCard(
             safeDuration
         )
 
-    GlassCard(
+    AppCard(
         modifier = Modifier
             .fillMaxWidth()
             // Swipe up to open the full-screen player
             .onVerticalSwipe { total -> if (total < -80f) onOpenPlayer() },
         shape = RoundedCornerShape(32.dp),
-        strength = 0.16f,
         contentPadding = 20.dp
     ) {
 
@@ -831,12 +809,7 @@ private fun NowPlayingCard(
                 onSeek(value.toInt())
             },
             valueRange = 0f..safeDuration.toFloat(),
-            modifier = Modifier.fillMaxWidth(),
-            colors = SliderDefaults.colors(
-                thumbColor = AccentPink,
-                activeTrackColor = AccentPink,
-                inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-            )
+            modifier = Modifier.fillMaxWidth()
         )
 
 
@@ -869,7 +842,7 @@ private fun NowPlayingCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
 
-            GlassIconButton(
+            AppIconButton(
                 onClick = onPrevious,
                 buttonSize = 52.dp
             ) {
@@ -889,7 +862,7 @@ private fun NowPlayingCard(
                 modifier = Modifier
                     .size(72.dp)
                     .clip(CircleShape)
-                    .background(AccentPink)
+                    .background(MaterialTheme.colorScheme.primary)
                     .clickable(onClick = onPlayPause),
                 contentAlignment = Alignment.Center
             ) {
@@ -904,7 +877,7 @@ private fun NowPlayingCard(
 
             Spacer(modifier = Modifier.width(20.dp))
 
-            GlassIconButton(
+            AppIconButton(
                 onClick = onNext,
                 buttonSize = 52.dp
             ) {

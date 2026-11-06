@@ -1,6 +1,7 @@
 package com.divyamusic.divyalokk
 
 import android.media.audiofx.Equalizer
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -23,7 +24,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -35,7 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -242,12 +242,11 @@ fun EqualizerScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
 
-            GlassIconButton(onClick = onBack) {
+            AppIconButton(onClick = onBack) {
 
                 Icon(
                     imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White
+                    contentDescription = "Back"
                 )
             }
 
@@ -255,7 +254,6 @@ fun EqualizerScreen(
                 text = "Equalizer",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
                 modifier = Modifier.padding(start = 12.dp)
             )
         }
@@ -282,10 +280,9 @@ fun EqualizerSection(
     modifier: Modifier = Modifier
 ) {
 
-    GlassCard(
+    AppCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
-        strength = 0.16f,
         contentPadding = 20.dp
     ) {
 
@@ -298,8 +295,7 @@ fun EqualizerSection(
             Text(
                 text = "Equalizer",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
+                fontWeight = FontWeight.Bold
             )
 
             Switch(
@@ -307,8 +303,8 @@ fun EqualizerSection(
                 onCheckedChange = { equalizer.toggle(it) },
                 enabled = equalizer.available,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = divyaAccent()
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary
                 )
             )
         }
@@ -321,7 +317,7 @@ fun EqualizerSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            return@GlassCard
+            return@AppCard
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -376,12 +372,7 @@ fun EqualizerSection(
                     onValueChange = { equalizer.setBand(index, it.roundToInt()) },
                     valueRange = equalizer.minLevel.toFloat()..equalizer.maxLevel.toFloat(),
                     enabled = equalizer.isOn,
-                    modifier = Modifier.weight(1f),
-                    colors = SliderDefaults.colors(
-                        thumbColor = divyaAccent(),
-                        activeTrackColor = divyaAccent(),
-                        inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-                    )
+                    modifier = Modifier.weight(1f)
                 )
 
                 Text(
@@ -404,13 +395,12 @@ private fun EqualizerChip(
     onClick: () -> Unit
 ) {
 
+    val scheme = MaterialTheme.colorScheme
+
     Box(
         modifier = Modifier
-            .glass(
-                shape = RoundedCornerShape(50),
-                tint = if (selected) AccentPink else Color.White,
-                strength = if (selected) 0.3f else 0.1f
-            )
+            .clip(RoundedCornerShape(50))
+            .background(if (selected) scheme.primaryContainer else scheme.surfaceContainerHigh)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
@@ -418,7 +408,7 @@ private fun EqualizerChip(
         Text(
             text = name,
             style = MaterialTheme.typography.bodySmall,
-            color = Color.White
+            color = if (selected) scheme.onPrimaryContainer else scheme.onSurface
         )
     }
 }

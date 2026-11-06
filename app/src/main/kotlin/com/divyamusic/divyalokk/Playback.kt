@@ -1,5 +1,6 @@
 package com.divyamusic.divyalokk
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.media.AudioDeviceCallback
@@ -103,6 +104,7 @@ object Playback {
     }
 
     /** True when wired headphones or a Bluetooth audio device are connected. */
+    @SuppressLint("NewApi") // API 23+ calls are only reached after the SDK check below
     private fun hasHeadphones(audio: AudioManager): Boolean {
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
