@@ -1,7 +1,10 @@
 package com.divyamusic.divyalokk
 
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
@@ -16,8 +19,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.random.Random
 
 
 // ----------------------------------------------------
@@ -36,8 +41,20 @@ object Playback {
     private const val KEY_INDEX = "index"
     private const val KEY_DURATION = "duration"
     private const val KEY_POSITION = "position"
+    private const val KEY_SHUFFLE = "shuffle"
+    private const val KEY_REPEAT = "repeat"
+
+    const val REPEAT_OFF = 0
+    const val REPEAT_ALL = 1
+    const val REPEAT_ONE = 2
 
     val songs = mutableStateListOf<Song>()
+
+    var shuffle by mutableStateOf(false)
+        private set
+
+    var repeatMode by mutableIntStateOf(REPEAT_OFF)
+        private set
 
     var currentIndex by mutableIntStateOf(-1)
         private set
@@ -57,6 +74,17 @@ object Playback {
     private var appContext: Context? = null
 
     private var prefs: SharedPreferences? = null
+
+    private var audioManager: AudioManager? = null
+
+    // True while this app holds audio focus
+    private var hasFocus = false
+
+    // True when playback was paused by a transient focus loss (call, other app), so it can resume
+    private var pausedByFocusLoss = false
+
+    // Volume multiplier: 1f normally, lowered while another app ducks our audio
+    private var duck = 1f
 
     // Position to resume from when the restored song is started again
     private var resumePosition = 0
@@ -83,6 +111,16 @@ object Playback {
 
         val audio = app.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
+        audioManager = audio
+
+        // Pause when the headphones are unplugged (speaker would otherwise start playing loudly)
+        ContextCompat.registerReceiver(
+            app,
+            noisyReceiver,
+            IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+
         equalizer.updateOutput(hasHeadphones(audio))
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -101,6 +139,69 @@ object Playback {
                 Handler(Looper.getMainLooper())
             )
         }
+    }
+
+    private val noisyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY && isPlaying) {
+                pausedByFocusLoss = false
+                playPause()
+            }
+        }
+    }
+
+    // Audio focus: other apps and calls can pause us, lower our volume, or hand focus back
+    @Suppress("DEPRECATION")
+    private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        when (change) {
+
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                duck = 1f
+                player?.setVolume(1f, 1f)
+                if (pausedByFocusLoss) {
+                    pausedByFocusLoss = false
+                    if (!isPlaying) playPause()
+                }
+            }
+
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                duck = 0.2f
+                player?.setVolume(duck, duck)
+            }
+
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                if (isPlaying) {
+                    pausedByFocusLoss = true
+                    playPause()
+                }
+            }
+
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                pausedByFocusLoss = false
+                if (isPlaying) playPause()
+                abandonFocus()
+            }
+        }
+    }
+
+    /** Asks for audio focus before playing. Returns true when granted. */
+    @Suppress("DEPRECATION")
+    private fun requestFocus(): Boolean {
+        if (hasFocus) return true
+        val audio = audioManager ?: return true
+        hasFocus = audio.requestAudioFocus(
+            focusListener,
+            AudioManager.STREAM_MUSIC,
+            AudioManager.AUDIOFOCUS_GAIN
+        ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        return hasFocus
+    }
+
+    @Suppress("DEPRECATION")
+    private fun abandonFocus() {
+        if (!hasFocus) return
+        audioManager?.abandonAudioFocus(focusListener)
+        hasFocus = false
     }
 
     /** True when wired headphones or a Bluetooth audio device are connected. */
@@ -182,14 +283,19 @@ object Playback {
                     currentPosition = start
                 }
 
-                newPlayer.setOnCompletionListener { next() }
+                newPlayer.setOnCompletionListener { onTrackFinished() }
+
+                newPlayer.setVolume(duck, duck)
 
                 // Apply the equalizer to this track's audio session
                 equalizer.attach(newPlayer.audioSessionId)
 
-                newPlayer.start()
-
-                isPlaying = true
+                if (requestFocus()) {
+                    newPlayer.start()
+                    isPlaying = true
+                } else {
+                    isPlaying = false
+                }
 
                 PlaybackService.start(context)
             }
@@ -220,16 +326,23 @@ object Playback {
 
         try {
 
+            pausedByFocusLoss = false
+
             if (current.isPlaying) {
 
                 current.pause()
                 isPlaying = false
                 currentPosition = livePosition()
 
+                // Let other apps take focus back while paused
+                abandonFocus()
+
             } else {
 
-                current.start()
-                isPlaying = true
+                if (requestFocus()) {
+                    current.start()
+                    isPlaying = true
+                }
             }
 
         } catch (e: Exception) {
@@ -239,26 +352,74 @@ object Playback {
             isPlaying = false
         }
 
-        save()
+        savePlayerState()
         changed()
+    }
+
+    /** Next track in play order: random when shuffle is on, otherwise the list order. */
+    private fun nextIndex(): Int? {
+
+        if (songs.isEmpty()) return null
+
+        if (shuffle && songs.size > 1) {
+
+            var pick: Int
+            do {
+                pick = Random.nextInt(songs.size)
+            } while (pick == currentIndex)
+
+            return pick
+        }
+
+        if (currentIndex < songs.lastIndex) return currentIndex + 1
+
+        return if (repeatMode == REPEAT_ALL) 0 else null
     }
 
     fun next() {
 
         if (songs.isEmpty()) return
 
-        if (currentIndex < songs.lastIndex) {
+        val index = nextIndex()
 
-            playSong(currentIndex + 1)
+        if (index != null) {
+
+            playSong(index)
 
         } else {
 
-            // Last song finished
+            // Last song finished and repeat is off
             isPlaying = false
             currentPosition = duration
+            abandonFocus()
             save()
             changed()
         }
+    }
+
+    /** Called when a track ends: repeat-one replays it, otherwise move to the next track. */
+    private fun onTrackFinished() {
+
+        if (repeatMode == REPEAT_ONE && currentIndex in songs.indices) {
+            playSong(currentIndex)
+        } else {
+            next()
+        }
+    }
+
+    fun toggleShuffle() {
+
+        shuffle = !shuffle
+        prefs?.edit()?.putBoolean(KEY_SHUFFLE, shuffle)?.apply()
+        changed()
+    }
+
+    /** Cycles Off, All, One. */
+    fun cycleRepeat() {
+
+        repeatMode = (repeatMode + 1) % 3
+        prefs?.edit()?.putInt(KEY_REPEAT, repeatMode)?.apply()
+        changed()
     }
 
     fun previous() {
@@ -293,7 +454,7 @@ object Playback {
         }
 
         currentPosition = safe
-        save()
+        savePlayerState()
         changed()
     }
 
@@ -312,10 +473,14 @@ object Playback {
 
         currentPosition = livePosition()
 
-        savePosition()
+        savePlayerState()
     }
 
     fun release() {
+
+        abandonFocus()
+
+        runCatching { appContext?.unregisterReceiver(noisyReceiver) }
 
         equalizer.release()
 
@@ -356,9 +521,14 @@ object Playback {
             .apply()
     }
 
-    private fun savePosition() {
+    /** Saves only the player fields. The song list is unchanged, so it is not rewritten. */
+    private fun savePlayerState() {
 
-        prefs?.edit()?.putInt(KEY_POSITION, currentPosition)?.apply()
+        prefs?.edit()
+            ?.putInt(KEY_INDEX, currentIndex)
+            ?.putInt(KEY_DURATION, duration)
+            ?.putInt(KEY_POSITION, currentPosition)
+            ?.apply()
     }
 
     private fun restore() {
@@ -390,5 +560,9 @@ object Playback {
         currentPosition = store.getInt(KEY_POSITION, 0)
 
         resumePosition = currentPosition
+
+        shuffle = store.getBoolean(KEY_SHUFFLE, false)
+
+        repeatMode = store.getInt(KEY_REPEAT, REPEAT_OFF).coerceIn(REPEAT_OFF, REPEAT_ONE)
     }
 }

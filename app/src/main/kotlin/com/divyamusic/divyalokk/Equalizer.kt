@@ -301,7 +301,8 @@ fun EqualizerSection(
             Switch(
                 checked = equalizer.isOn,
                 onCheckedChange = { equalizer.toggle(it) },
-                enabled = equalizer.available,
+                // Turning on needs a song and headphones/Bluetooth; turning off is always allowed
+                enabled = equalizer.available && (equalizer.outputConnected || equalizer.isOn),
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                     checkedTrackColor = MaterialTheme.colorScheme.primary
@@ -318,6 +319,17 @@ fun EqualizerSection(
             )
 
             return@AppCard
+        }
+
+        if (!equalizer.outputConnected) {
+
+            Text(
+                text = "Connect wired headphones or a Bluetooth device to use the equalizer.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
         }
 
         Spacer(modifier = Modifier.height(12.dp))

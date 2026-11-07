@@ -29,6 +29,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -102,7 +105,11 @@ fun FullPlayerScreen(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onOpenEqualizer: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    shuffle: Boolean = false,
+    repeatMode: Int = Playback.REPEAT_OFF,
+    onToggleShuffle: () -> Unit = {},
+    onCycleRepeat: () -> Unit = {}
 ) {
 
     val screenHeightPx = with(LocalDensity.current) {
@@ -352,6 +359,39 @@ fun FullPlayerScreen(
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
+
+                // SHUFFLE AND REPEAT
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+
+                    AppIconButton(onClick = onToggleShuffle) {
+
+                        Icon(
+                            imageVector = Icons.Default.Shuffle,
+                            contentDescription = if (shuffle) "Shuffle on" else "Shuffle off",
+                            tint = if (shuffle) scheme.primary else scheme.onSurfaceVariant
+                        )
+                    }
+
+                    AppIconButton(onClick = onCycleRepeat) {
+
+                        Icon(
+                            imageVector = if (repeatMode == Playback.REPEAT_ONE) Icons.Default.RepeatOne
+                            else Icons.Default.Repeat,
+                            contentDescription = when (repeatMode) {
+                                Playback.REPEAT_ALL -> "Repeat all"
+                                Playback.REPEAT_ONE -> "Repeat one"
+                                else -> "Repeat off"
+                            },
+                            tint = if (repeatMode == Playback.REPEAT_OFF) scheme.onSurfaceVariant else scheme.primary
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // EQUALIZER PAGE BUTTON
                 Box(

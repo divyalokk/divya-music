@@ -83,7 +83,15 @@ class MainActivity : ComponentActivity() {
 
                 onNext = { Playback.next() },
 
-                onSeek = { position -> Playback.seekTo(position) }
+                onSeek = { position -> Playback.seekTo(position) },
+
+                shuffle = Playback.shuffle,
+
+                repeatMode = Playback.repeatMode,
+
+                onToggleShuffle = { Playback.toggleShuffle() },
+
+                onCycleRepeat = { Playback.cycleRepeat() }
             )
         }
 

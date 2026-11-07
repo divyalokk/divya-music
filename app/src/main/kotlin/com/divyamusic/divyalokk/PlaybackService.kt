@@ -33,12 +33,27 @@ class PlaybackService : Service() {
 
     private var session: MediaSession? = null
 
+    // True while the once-a-second progress update is scheduled
+    private var ticking = false
+
+    // Updates the progress bar only while playing; stops itself when paused to save battery
     private val ticker = object : Runnable {
         override fun run() {
+            if (!Playback.isPlaying) {
+                ticking = false
+                refresh()
+                return
+            }
             Playback.tick()
             refresh()
             handler.postDelayed(this, 1000L)
         }
+    }
+
+    private fun ensureTicker() {
+        if (ticking || !Playback.isPlaying) return
+        ticking = true
+        handler.post(ticker)
     }
 
     private val sessionCallback = object : MediaSession.Callback() {
@@ -96,8 +111,7 @@ class PlaybackService : Service() {
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
         )
 
-        handler.removeCallbacks(ticker)
-        handler.post(ticker)
+        ensureTicker()
 
         return START_NOT_STICKY
     }
@@ -106,6 +120,7 @@ class PlaybackService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(ticker)
+        ticking = false
         Playback.onStateChanged = null
 
         session?.apply {
@@ -127,6 +142,9 @@ class PlaybackService : Service() {
 
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification())
+
+        // Resume the progress updates if playback has just started again
+        ensureTicker()
     }
 
     /** Keeps the media session's metadata and playback state in step with [Playback]. */

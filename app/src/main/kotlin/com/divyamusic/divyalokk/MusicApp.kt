@@ -58,7 +58,15 @@ fun MusicApp(
 
     onNext: () -> Unit,
 
-    onSeek: (Int) -> Unit
+    onSeek: (Int) -> Unit,
+
+    shuffle: Boolean = false,
+
+    repeatMode: Int = Playback.REPEAT_OFF,
+
+    onToggleShuffle: () -> Unit = {},
+
+    onCycleRepeat: () -> Unit = {}
 ) {
 
 
@@ -224,7 +232,11 @@ fun MusicApp(
                         showPlayer = false
                         page = AppPage.Equalizer
                     },
-                    onClose = { showPlayer = false }
+                    onClose = { showPlayer = false },
+                    shuffle = shuffle,
+                    repeatMode = repeatMode,
+                    onToggleShuffle = onToggleShuffle,
+                    onCycleRepeat = onCycleRepeat
                 )
             }
 
