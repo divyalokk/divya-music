@@ -2,6 +2,8 @@
 
 DivyaMusic is a music player for Android, built with Kotlin, Jetpack Compose, and Material 3. It is a project by [@divyalokk](https://github.com/divyalokk). The application source lives in the [`app`](./app) directory.
 
+[![CI](https://github.com/divyalokk/divya-music/actions/workflows/blank.yml/badge.svg)](https://github.com/divyalokk/divya-music/actions/workflows/blank.yml)
+
 ## Table of Contents
 
 - [Features](#features)
